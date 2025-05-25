@@ -33,11 +33,42 @@
     <div class="container py-4">
         <h2 class="mb-4">Dashboard Overview</h2>
         
-        <div class="row mb-4" id="stats-row">
-            <!-- Stats will be loaded here -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stat-card stat-users">
+                    <div class="card-body">
+                        <h5 class="card-title">Active Users</h5>
+                        <h3>{{ stats.active_users }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card stat-emails">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Emails</h5>
+                        <h3>{{ stats.total_emails }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card stat-spam">
+                    <div class="card-body">
+                        <h5 class="card-title">Spam Emails</h5>
+                        <h3>{{ stats.spam_emails }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card stat-read">
+                    <div class="card-body">
+                        <h5 class="card-title">Read Emails</h5>
+                        <h3>{{ stats.read_emails }}</h3>
+                    </div>
+                </div>
+            </div>
         </div>
         
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">User Management</h5>
                 <button class="btn btn-sm btn-primary" id="refresh-users">
@@ -55,32 +86,83 @@
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="users-table">
-                        <!-- Users will be loaded here -->
+                    <tbody>
+                        {% for user in users %}
+                        <tr class="{% if user[2] %}user-active{% else %}user-inactive{% endif %} {% if user[3] %}user-admin{% endif %}">
+                            <td>{{ user[0] }}</td>
+                            <td>{{ user[1] }}</td>
+                            <td>{% if user[2] %}Active{% else %}Inactive{% endif %}</td>
+                            <td>{% if user[3] %}Admin{% else %}User{% endif %}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger" onclick="toggleUserStatus('{{ user[0] }}', {{ 'true' if user[2] else 'false' }})">
+                                    {% if user[2] %}Deactivate{% else %}Activate{% endif %}
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- All Emails Section -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">All Emails</h5>
+                <button class="btn btn-sm btn-primary" id="refresh-emails">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Subject</th>
+                                <th>Body</th>
+                                <th>Sent At</th>
+                                <th>Opened At</th>
+                                <th>Status</th>
+                                <th>Tone</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for email in all_emails %}
+                            <tr>
+                                <td>{{ email.id }}</td>
+                                <td>{{ email.sender_email }}</td>
+                                <td>{{ email.recipient_email }}</td>
+                                <td>{{ email.subject }}</td>
+                                <td>{{ email.body|truncate(50) }}</td>
+                                <td>{{ email.sent_at }}</td>
+                                <td>{{ email.opened_at if email.opened_at else "Not opened" }}</td>
+                                <td>
+                                    {% if email.is_spam %}
+                                    <span class="badge bg-danger">Spam</span>
+                                    {% else %}
+                                    <span class="badge bg-success">Normal</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ email.tone }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
+        const API_BASE = window.location.origin;
+        
         document.addEventListener('DOMContentLoaded', () => {
             // No need to check localStorage, Flask session handles authentication
-            loadStats();
-            loadUsers();
+            // Initial load is handled by Flask template rendering
         });
-
-        // Load statistics - use the data passed from Flask
-        function loadStats() {
-            // The stats are already in the template from Flask
-            // This function can be used for refreshing stats via API if needed
-        }
-
-        // Load users - the users are already in the template from Flask
-        function loadUsers() {
-            // The users are already in the template from Flask
-            // This function can be used for refreshing users via API if needed
-        }
 
         // Toggle user status
         async function toggleUserStatus(userId, isActive) {
@@ -92,16 +174,21 @@
                 });
                 
                 if (response.ok) {
-                    loadUsers();
-                    loadStats();
+                    window.location.reload();
                 }
             } catch (error) {
                 alert("Failed to update user status");
             }
         }
 
-        // Refresh users
-        document.getElementById('refresh-users').addEventListener('click', loadUsers);
+        // Refresh users and emails
+        document.getElementById('refresh-users').addEventListener('click', () => {
+            window.location.reload();
+        });
+        
+        document.getElementById('refresh-emails').addEventListener('click', () => {
+            window.location.reload();
+        });
 
         // Logout
         document.getElementById('logout-btn').addEventListener('click', () => {

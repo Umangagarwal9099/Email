@@ -176,6 +176,15 @@ def admin_dashboard():
     c.execute('SELECT id, email, is_active, is_admin FROM users ORDER BY email')
     users = c.fetchall()
 
+    # Get all emails with sender information
+    c.execute('''
+        SELECT e.*, u.email as sender_email 
+        FROM emails e
+        JOIN users u ON e.sender_id = u.id
+        ORDER BY e.sent_at DESC
+    ''')
+    all_emails = [dict(zip([column[0] for column in c.description], row)) for row in c.fetchall()]
+
     stats = {
         "active_users": c.execute('SELECT COUNT(*) FROM users WHERE is_active = 1').fetchone()[0],
         "total_emails": c.execute('SELECT COUNT(*) FROM emails').fetchone()[0],
@@ -184,7 +193,7 @@ def admin_dashboard():
     }
 
     conn.close()
-    return render_template('admin_dashboard.html', users=users, stats=stats, current_user=session.get('email'))
+    return render_template('admin_dashboard.html', users=users, stats=stats, all_emails=all_emails, current_user=session.get('email'))
 
 @app.route('/sender_dashboard')
 def sender_dashboard():

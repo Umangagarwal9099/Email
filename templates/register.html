@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Register - MailSense</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f9f9f9; }
+        .container { max-width: 400px; margin: 80px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px #ccc; }
+        h2 { text-align: center; margin-bottom: 20px; }
+        input[type="email"], input[type="password"] {
+            width: 100%; padding: 10px; margin: 8px 0 16px; border: 1px solid #ccc; border-radius: 4px;
+        }
+        button {
+            width: 100%; padding: 10px; background: #007bff; border: none; color: white; font-size: 16px; border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        .message { margin-top: 15px; text-align: center; }
+        .error { color: red; }
+        .success { color: green; }
+        a { text-decoration: none; color: #007bff; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Create an Account</h2>
+        <form method="POST" action="/register">
+            <input type="email" name="email" placeholder="Email" required />
+            <input type="password" name="password" placeholder="Password" required minlength="6" />
+            <button type="submit">Register</button>
+        </form>
+
+        {% if error %}
+            <div class="message error">{{ error }}</div>
+        {% endif %}
+        {% if message %}
+            <div class="message success">{{ message }}</div>
+        {% endif %}
+        <p style="text-align:center; margin-top: 20px;">
+            Already have an account? <a href="/login">Login here</a>
+        </p>
+    </div>
+</body>
+</html>

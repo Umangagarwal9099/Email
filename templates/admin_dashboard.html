@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        .stat-card {
+            border-left: 4px solid;
+            transition: all 0.3s;
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .stat-users { border-color: #4361ee; }
+        .stat-emails { border-color: #4cc9f0; }
+        .stat-spam { border-color: #f72585; }
+        .stat-read { border-color: #4CAF50; }
+        .user-active { background-color: #e8f5e9; }
+        .user-inactive { background-color: #ffebee; }
+        .user-admin { background-color: #e3f2fd; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">MailSense Admin</a>
+            <button class="btn btn-outline-light" id="logout-btn">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <h2 class="mb-4">Dashboard Overview</h2>
+        
+        <div class="row mb-4" id="stats-row">
+            <!-- Stats will be loaded here -->
+        </div>
+        
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">User Management</h5>
+                <button class="btn btn-sm btn-primary" id="refresh-users">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Role</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table">
+                        <!-- Users will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // No need to check localStorage, Flask session handles authentication
+            loadStats();
+            loadUsers();
+        });
+
+        // Load statistics - use the data passed from Flask
+        function loadStats() {
+            // The stats are already in the template from Flask
+            // This function can be used for refreshing stats via API if needed
+        }
+
+        // Load users - the users are already in the template from Flask
+        function loadUsers() {
+            // The users are already in the template from Flask
+            // This function can be used for refreshing users via API if needed
+        }
+
+        // Toggle user status
+        async function toggleUserStatus(userId, isActive) {
+            if (!confirm(`Are you sure you want to ${isActive ? 'deactivate' : 'activate'} this user?`)) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadUsers();
+                    loadStats();
+                }
+            } catch (error) {
+                alert("Failed to update user status");
+            }
+        }
+
+        // Refresh users
+        document.getElementById('refresh-users').addEventListener('click', loadUsers);
+
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            window.location.href = '/logout';
+        });
+    </script>
+</body>
+</html>

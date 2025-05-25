@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inbox - MailSense</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <h2 class="mb-4">Inbox - {{ current_user }}</h2>
+        
+        {% if emails %}
+            <table class="table table-bordered bg-white">
+                <thead class="table-dark">
+                    <tr>
+                        <th>From</th>
+                        <th>Subject</th>
+                        <th>Body</th>
+                        <th>Sent At</th>
+                        <th>Read At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for email in emails %}
+                    <tr>
+                        <td>{{ email['sender_email'] }}</td>
+                        <td>{{ email['subject'] }}</td>
+                        <td>{{ email['body'] }}</td>
+                        <td>{{ email['sent_at'] }}</td>
+                        <td>{{ email['opened_at'] if email['opened_at'] else "Not read" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No received emails yet.</p>
+        {% endif %}
+
+        <a href="{{ url_for('sender_dashboard') }}" class="btn btn-secondary mt-3">Back to Dashboard</a>
+    </div>
+</body>
+</html>

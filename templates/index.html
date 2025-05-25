@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MailSense Portal</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #667eea, #764ba2);
+      color: #fff;
+    }
+    .container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .form-box {
+      background: rgba(255, 255, 255, 0.9);
+      color: #333;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      width: 100%;
+      max-width: 400px;
+      margin: 20px 0;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #667eea;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background-color: #5a67d8;
+    }
+    #message {
+      margin: 15px 0;
+      min-height: 20px;
+      text-align: center;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MailSense Portal</h1>
+    
+    <!-- Signup Form -->
+    <div class="form-box" id="signup-box">
+      <h2>Sign Up</h2>
+      <input type="text" id="signup-username" placeholder="Username" required>
+      <input type="password" id="signup-password" placeholder="Password" required>
+      <button onclick="signup()">Sign Up</button>
+    </div>
+
+    <!-- Login Form -->
+    <div class="form-box" id="login-box">
+      <h2>Login</h2>
+      <input type="text" id="login-username" placeholder="Username" required>
+      <input type="password" id="login-password" placeholder="Password" required>
+      <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Email Composition (Shown after login) -->
+    <div class="form-box hidden" id="compose-box">
+      <h2>Compose Email</h2>
+      <input type="number" id="sender-id" placeholder="Your User ID" required>
+      <input type="number" id="recipient-id" placeholder="Recipient User ID" required>
+      <input type="text" id="subject" placeholder="Subject" required>
+      <textarea id="body" placeholder="Email content" rows="5" required></textarea>
+      <button onclick="sendEmail()">Send Email</button>
+    </div>
+
+    <!-- Tracking (Shown after login) -->
+    <div class="form-box hidden" id="track-box">
+      <h2>Track Email</h2>
+      <input type="number" id="track-email-id" placeholder="Email ID to track">
+      <button onclick="trackEmail()">Check Status</button>
+    </div>
+
+    <!-- System Messages -->
+    <div id="message"></div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:5000';
+    
+    function showMessage(text, isError = false) {
+      const msg = document.getElementById('message');
+      msg.textContent = text;
+      msg.style.color = isError ? '#ff4444' : '#44ff44';
+    }
+
+    async function signup() {
+      try {
+        const response = await fetch(`${API_BASE}/signup`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            username: document.getElementById('signup-username').value,
+            password: document.getElementById('signup-password').value
+          })
+        });
+        const data = await response.json();
+        showMessage(data.message || data.error, !response.ok);
+      } catch (error) {
+        showMessage("Network error: " + error.message, true);
+      }
+    }
+
+    async function login() {
+      const username = document.getElementById('login-username').value;
+      const password = document.getElementById('login-password').value;
+
+      try {
+        const response = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username, password})
+        });
+        const data = await response.json();
+
+        if (data.admin) {
+          window.location.href = `${API_BASE}/admin-data`;
+        } else if (data.message) {
+          showMessage("Login successful!");
+          document.getElementById('compose-box').classList.remove('hidden');
+          document.getElementById('track-box').classList.remove('hidden');
+        } else {
+          showMessage(data.error || "Login failed", true);
+        }
+      } catch (error) {
+        showMessage("Network error: " + error.message, true);
+      }
+    }
+
+    async function sendEmail() {
+      try {
+        const response = await fetch(`${API_BASE}/send-email`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            sender_id: parseInt(document.getElementById('sender-id').value),
+            recipient_id: parseInt(document.getElementById('recipient-id').value),
+            subject: document.getElementById('subject').value,
+            body: document.getElementById('body').value
+          })
+        });
+        const data = await response.json();
+        showMessage(data.message || "Email sent!");
+      } catch (error) {
+        showMessage("Failed to send email: " + error.message, true);
+      }
+    }
+
+    async function trackEmail() {
+      const emailId = document.getElementById('track-email-id').value;
+      if (!emailId) {
+        showMessage("Please enter an email ID", true);
+        return;
+      }
+      
+      try {
+        await fetch(`${API_BASE}/track/${emailId}`);
+        showMessage(`Email ${emailId} marked as read`);
+      } catch (error) {
+        showMessage("Tracking failed: " + error.message, true);
+      }
+    }
+  </script>
+</body>
+</html>

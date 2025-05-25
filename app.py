@@ -152,14 +152,18 @@ def get_inbox():
     emails = [dict(row) for row in cur.fetchall()]
     return jsonify(emails)
 
-@app.route('/email/<int:email_id>/open', methods=['POST'])
-def mark_email_opened(email_id):
+# app.py or routes.py
+
+@app.route('/admin/emails', methods=['GET'])
+# Optional: Add a decorator to ensure only admins can access
+def get_all_emails():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("UPDATE emails SET opened_at = ? WHERE id = ?", (datetime.now(), email_id))
-    conn.commit()
+    cur.execute("SELECT * FROM emails ORDER BY sent_at DESC")
+    emails = [dict(row) for row in cur.fetchall()]
     conn.close()
-    return jsonify({'status': 'success', 'message': 'Email marked as read'})
+    return jsonify(emails)
+
 
 @app.route('/admin_dashboard')
 def admin_dashboard():
@@ -186,7 +190,28 @@ def admin_dashboard():
 def sender_dashboard():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    return render_template('sender_dashboard.html')
+
+    current_email = session.get('email')
+    user_id = session.get('user_id')
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Get emails sent by this user with proper join
+    cur.execute("""
+        SELECT e.id, e.recipient_email, e.subject, e.body, e.sent_at, e.opened_at, 
+               e.is_spam, e.tone, u.email AS sender_email
+        FROM emails e
+        JOIN users u ON e.sender_id = u.id
+        WHERE e.sender_id = ?
+        ORDER BY e.sent_at DESC
+    """, (user_id,))
+
+    sent_emails = cur.fetchall()
+    conn.close()
+
+    return render_template('sender_dashboard.html', current_user=current_email, current_id=user_id, emails=sent_emails)
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MailSense - Sender Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -42,6 +40,7 @@
                 <div class="card mb-4">
                     <div class="card-header bg-white">
                         <h5 class="mb-0">Compose Email</h5>
+                        <p>Your User ID: {{ current_id }}</p>
                     </div>
                     <div class="card-body">
                         <form id="compose-form">
@@ -71,7 +70,6 @@
                         <h5 class="mb-0">Sent Emails</h5>
                         <button id="refresh-btn" class="btn btn-sm btn-outline-primary">Refresh</button>
                         <a href="{{ url_for('received_emails') }}" class="btn btn-primary mt-3">📥 View Received Emails</a>
-
                     </div>
                     <div class="card-body">
                         <div id="emails-list">
@@ -83,45 +81,43 @@
         </div>
     </div>
 
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
     <script>
         const API_BASE = 'http://localhost:5000';
-        let currentUser = null;
-
-        // DOM Elements
         const composeForm = document.getElementById('compose-form');
         const emailsList = document.getElementById('emails-list');
         const toneFeedback = document.getElementById('tone-feedback');
         const userEmailSpan = document.getElementById('user-email');
 
-        // Initialize
+        const currentUser = {
+            user_id: {{ current_id }},
+            email: {{ current_user | tojson }}
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
-            const userData = JSON.parse(localStorage.getItem('mailSenseUser'));
-            
-            currentUser = userData;
             document.getElementById('sender_id').value = currentUser.user_id;
             userEmailSpan.textContent = currentUser.email;
-            
             loadEmails();
         });
 
-        // Analyze tone as user types
+        // Tone Detection
         document.getElementById('body').addEventListener('input', function() {
             const text = this.value;
             if (!text) {
                 toneFeedback.innerHTML = '';
                 return;
             }
-            
-            // Simple client-side tone detection (matches backend logic)
+
             const polite = (text.match(/\b(please|thank|appreciate|kindly)\b/gi) || []).length;
             const urgent = (text.match(/\b(urgent|immediate|ASAP|important)\b/gi) || []).length;
-            
+
             let tone = "Formal";
             if (polite > 2) tone = "Polite";
             else if (urgent > 1) tone = "Urgent";
             else if (polite > 0) tone = "Neutral";
-            
+
             toneFeedback.innerHTML = `
                 <div class="alert alert-light">
                     Email tone: <span class="tone-badge tone-${tone.toLowerCase()}">${tone}</span>
@@ -131,7 +127,7 @@
             `;
         });
 
-        // Send email
+        // Send Email
         document.getElementById('send-btn').addEventListener('click', async () => {
             const formData = {
                 sender_id: document.getElementById('sender_id').value,
@@ -139,16 +135,16 @@
                 subject: document.getElementById('subject').value,
                 body: document.getElementById('body').value
             };
-            
+
             try {
                 const response = await fetch(`${API_BASE}/send`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (response.ok) {
                     alert(`Email sent! ${result.is_spam ? '(Marked as spam)' : ''}`);
                     composeForm.reset();
@@ -162,57 +158,42 @@
             }
         });
 
-        // Load sent emails
+        // Load Sent Emails
+        async function loadEmails() {
+            try {
+                const response = await fetch(`${API_BASE}/sent_emails?sender_id=${currentUser.user_id}`);
+                const sentEmails = await response.json();
 
-    const inboxList = document.getElementById('inbox-list');
-
-    // Load inbox
-    async function loadInbox() {
-        try {
-            const response = await fetch(`${API_BASE}/inbox?recipient_email=${currentUser.email}`);
-            const inboxEmails = await response.json();
-
-            inboxList.innerHTML = inboxEmails.map(email => `
-                <div class="email-card card mb-3">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between">
-                            <h6 class="card-title">${email.subject || '(No subject)'}</h6>
-                            <span class="text-muted small">${new Date(email.sent_at).toLocaleString()}</span>
-                        </div>
-                        <p class="card-text text-muted">From: User #${email.sender_id}</p>
-                        <p class="card-text">${email.body}</p>
-                        <div>
-                            <span class="tone-badge tone-${email.tone.toLowerCase()}">${email.tone}</span>
-                            ${email.is_spam ? '<span class="badge bg-danger ms-2">SPAM</span>' : ''}
+                emailsList.innerHTML = sentEmails.map(email => `
+                    <div class="email-card card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="card-title">${email.subject || '(No subject)'}</h6>
+                                <span class="text-muted small">${new Date(email.sent_at).toLocaleString()}</span>
+                            </div>
+                            <p class="card-text">To: ${email.recipient}</p>
+                            <p class="card-text">${email.body}</p>
+                            <div>
+                                <span class="tone-badge tone-${email.tone.toLowerCase()}">${email.tone}</span>
+                                ${email.is_spam ? '<span class="badge bg-danger ms-2">SPAM</span>' : ''}
+                                ${email.read_time ? `<span class="badge bg-success ms-2">Read at ${new Date(email.read_time).toLocaleString()}</span>` : ''}
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('') || '<p class="text-center text-muted">No received emails</p>';
-        } catch (err) {
-            inboxList.innerHTML = '<div class="alert alert-danger">Failed to load inbox</div>';
+                `).join('') || '<p class="text-center text-muted">No sent emails</p>';
+            } catch (err) {
+                emailsList.innerHTML = '<div class="alert alert-danger">Failed to load emails</div>';
+            }
         }
-    }
 
-    // Refresh buttons
-    document.getElementById('refresh-btn').addEventListener('click', loadEmails);
-    document.getElementById('inbox-refresh-btn').addEventListener('click', loadInbox);
-
-    // Load inbox when tab is shown
-    document.getElementById('inbox-tab').addEventListener('click', loadInbox);
-
-        // Refresh button
+        // Refresh
         document.getElementById('refresh-btn').addEventListener('click', loadEmails);
 
         // Logout
         document.getElementById('logout-btn').addEventListener('click', () => {
             localStorage.removeItem('mailSenseUser');
-            window.location.href = 'login';
+            window.location.href = '/login';
         });
-
-        // View email details
-        function viewEmail(id) {
-            alert(`Would show details for email ${id} in a real implementation`);
-        }
     </script>
 </body>
 </html>

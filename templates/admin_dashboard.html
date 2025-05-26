@@ -20,13 +20,25 @@
         .user-active { background-color: #e8f5e9; }
         .user-inactive { background-color: #ffebee; }
         .user-admin { background-color: #e3f2fd; }
+        .btn-remove {
+            transition: all 0.2s;
+        }
+        .btn-remove:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 5px rgba(220, 53, 69, 0.5);
+        }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand" href="#">MailSense Admin</a>
-            <button class="btn btn-outline-light" id="logout-btn">Logout</button>
+            <div class="d-flex align-items-center">
+                <span class="text-white me-3">{{ current_user }}</span>
+                <button class="btn btn-outline-light" id="logout-btn">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
+            </div>
         </div>
     </nav>
 
@@ -76,36 +88,44 @@
                 </button>
             </div>
             <div class="card-body">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Email</th>
-                            <th>Status</th>
-                            <th>Role</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for user in users %}
-                        <tr class="{% if user[2] %}user-active{% else %}user-inactive{% endif %} {% if user[3] %}user-admin{% endif %}">
-                            <td>{{ user[0] }}</td>
-                            <td>{{ user[1] }}</td>
-                            <td>{% if user[2] %}Active{% else %}Inactive{% endif %}</td>
-                            <td>{% if user[3] %}Admin{% else %}User{% endif %}</td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-danger" onclick="toggleUserStatus('{{ user[0] }}', {{ 'true' if user[2] else 'false' }})">
-                                    {% if user[2] %}Deactivate{% else %}Activate{% endif %}
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr class="{% if user[2] %}user-active{% else %}user-inactive{% endif %} {% if user[3] %}user-admin{% endif %}">
+                                <td>{{ user[0] }}</td>
+                                <td>{{ user[1] }}</td>
+                                <td>{% if user[2] %}Active{% else %}Inactive{% endif %}</td>
+                                <td>{% if user[3] %}Admin{% else %}User{% endif %}</td>
+                                <td>
+                                    {% if not user[3] %}
+                                        <button class="btn btn-sm btn-danger btn-remove" onclick="deleteUser('{{ user[0] }}')">
+                                            <i class="bi bi-trash-fill"></i> Remove User
+                                        </button>
+                                    {% else %}
+                                        <button class="btn btn-sm btn-secondary" disabled>
+                                            <i class="bi bi-lock-fill"></i> Admin
+                                        </button>
+                                    {% endif %}
+
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <!-- All Emails Section -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">All Emails</h5>
@@ -159,29 +179,32 @@
     <script>
         const API_BASE = window.location.origin;
         
-        document.addEventListener('DOMContentLoaded', () => {
-            // No need to check localStorage, Flask session handles authentication
-            // Initial load is handled by Flask template rendering
-        });
-
-        // Toggle user status
-        async function toggleUserStatus(userId, isActive) {
-            if (!confirm(`Are you sure you want to ${isActive ? 'deactivate' : 'activate'} this user?`)) return;
+        async function deleteUser(userId) {
+            if (!confirm('WARNING: This will permanently remove the user and all their emails!\n\nAre you sure you want to proceed?')) {
+                return;
+            }
             
             try {
                 const response = await fetch(`${API_BASE}/admin/users/${userId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
+                const result = await response.json();
+                
                 if (response.ok) {
+                    alert(result.message);
                     window.location.reload();
+                } else {
+                    throw new Error(result.message || 'Failed to delete user');
                 }
             } catch (error) {
-                alert("Failed to update user status");
+                alert(`Error: ${error.message}`);
             }
         }
 
-        // Refresh users and emails
         document.getElementById('refresh-users').addEventListener('click', () => {
             window.location.reload();
         });
@@ -190,7 +213,6 @@
             window.location.reload();
         });
 
-        // Logout
         document.getElementById('logout-btn').addEventListener('click', () => {
             window.location.href = '/logout';
         });

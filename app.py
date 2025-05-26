@@ -4,6 +4,8 @@ import sqlite3
 import bcrypt
 import re
 from datetime import datetime
+from backend.llama_utils import generate_llama_response , classify_email_tone , detect_spam
+
 
 app = Flask(__name__)
 app.secret_key = 'your_super_secret_key_here'
@@ -21,7 +23,7 @@ def init_db():
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             is_active BOOLEAN DEFAULT 1,
-            is_admin BOOLEAN DEFAULT 0
+            is_admin BOOLEAN DEFAULT 0,
         )
     ''')
 
@@ -96,75 +98,214 @@ def login():
             session['user_id'] = row[0]
             session['is_admin'] = bool(row[2])
             session['email'] = email
-            app.logger.info('%s logged in successfully', email)
-
             return jsonify({
                 'status': 'success',
                 'redirect': '/admin_dashboard' if row[2] else '/sender_dashboard'
             })
 
-        app.logger.warning('Failed login attempt for %s', email)
         return jsonify({'status': 'fail', 'message': 'Invalid email or password'}), 401
 
     return render_template('login.html')
 
 @app.route('/send', methods=['POST'])
 def send_email():
+    if 'user_id' not in session:
+        return jsonify({'status': 'error', 'message': 'Not authenticated'}), 401
+
     data = request.json
+
+    # Validate required keys
+    required_keys = ['sender_id', 'recipient', 'subject', 'body']
+    missing_keys = [key for key in required_keys if key not in data]
+    if missing_keys:
+        return jsonify({
+            'status': 'error',
+            'message': f"Missing required fields: {', '.join(missing_keys)}"
+        }), 400
+
     conn = get_db()
     cur = conn.cursor()
 
-    tone = "na"
-    is_spam = 1 if 'lottery' in data['body'].lower() else 0
+    # Check if user is active
+    cur.execute('SELECT is_active FROM users WHERE id = ?', (data['sender_id'],))
+    user = cur.fetchone()
+    if not user or not user['is_active']:
+        conn.close()
+        return jsonify({'status': 'error', 'message': 'User account is disabled'}), 403
+
+    body_text = data['body']
+    tone = classify_email_tone(body_text)
+    is_spam = 1 if detect_spam(body_text) else 0
 
     cur.execute("""
         INSERT INTO emails (sender_id, recipient_email, subject, body, tone, sent_at, is_spam)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (data['sender_id'], data['recipient'], data['subject'], data['body'], tone, datetime.now(), is_spam))
+    """, (
+        data['sender_id'],
+        data['recipient'],
+        data['subject'],
+        data['body'],
+        tone,
+        datetime.now(),
+        is_spam
+    ))
 
     conn.commit()
     conn.close()
     return jsonify({'message': 'Email sent', 'is_spam': bool(is_spam)}), 200
 
-@app.route('/emails', methods=['GET'])
-def get_sent_emails():
+
+@app.route('/sent_emails', methods=['GET'])
+def get_user_sent_emails():
     sender_id = request.args.get('sender_id')
     conn = get_db()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM emails WHERE sender_id = ? ORDER BY sent_at DESC", (sender_id,))
-    emails = [dict(row) for row in cur.fetchall()]
+    cur.execute("""
+        SELECT 
+            e.id,
+            e.recipient_email,
+            e.subject,
+            e.body,
+            e.sent_at,
+            e.opened_at,
+            e.is_spam,
+            e.tone
+        FROM emails e
+        WHERE e.sender_id = ?
+        ORDER BY e.sent_at DESC
+    """, (sender_id,))
+    
+    emails = []
+    for row in cur.fetchall():
+        email = dict(row)
+        # Convert datetime objects to strings
+        if email['sent_at']:
+            email['sent_at'] = email['sent_at']
+        if email['opened_at']:
+            email['opened_at'] = email['opened_at']
+
+        emails.append(email)
+    
+    conn.close()
     return jsonify(emails)
 
-@app.route('/inbox', methods=['GET'])
-def get_inbox():
-    recipient_email = request.args.get('recipient_email')
+@app.route('/received_emails')
+def received_emails():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    current_email = session.get('email')
+
     conn = get_db()
     cur = conn.cursor()
-
     cur.execute("""
-        SELECT e.*, u.email AS sender_email
+        SELECT 
+            e.id, 
+            e.subject, 
+            e.body, 
+            e.sent_at, 
+            e.opened_at, 
+            u.email AS sender_email
         FROM emails e
         JOIN users u ON e.sender_id = u.id
         WHERE e.recipient_email = ?
         ORDER BY e.sent_at DESC
-    """, (recipient_email,))
-    emails = [dict(row) for row in cur.fetchall()]
-    return jsonify(emails)
+    """, (current_email,))
+    emails = cur.fetchall()
+    conn.close()
 
-# app.py or routes.py
+    return render_template('received_emails.html', emails=emails, current_user=current_email)
 
-@app.route('/admin/emails', methods=['GET'])
-# Optional: Add a decorator to ensure only admins can access
-def get_all_emails():
+@app.route('/mark_email_read/<int:email_id>', methods=['POST'])
+def mark_email_read(email_id):
+    if 'user_id' not in session:
+        return jsonify({'status': 'error', 'message': 'Not authenticated'}), 401
+    
+    current_email = session.get('email')
+    current_time = datetime.now()
+    
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM emails ORDER BY sent_at DESC")
-    emails = [dict(row) for row in cur.fetchall()]
+    
+    # Check if email exists and is addressed to current user
+    cur.execute("""
+        SELECT id FROM emails 
+        WHERE id = ? AND recipient_email = ?
+    """, (email_id, current_email))
+    
+    email = cur.fetchone()
+    
+    if not email:
+        conn.close()
+        return jsonify({'status': 'error', 'message': 'Email not found or not authorized'}), 404
+    
+    # Update opened_at if not already set
+    cur.execute("""
+        UPDATE emails 
+        SET opened_at = ?
+        WHERE id = ? AND opened_at IS NULL
+    """, (current_time, email_id))
+    
+    conn.commit()
+    
+    # Get updated email data
+    cur.execute("""
+        SELECT e.opened_at, u.email AS sender_email, e.tone, e.is_spam
+        FROM emails e
+        JOIN users u ON e.sender_id = u.id
+        WHERE e.id = ?
+    """, (email_id,))
+
+    row = cur.fetchone()
+    updated_email = dict(row)
     conn.close()
-    return jsonify(emails)
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Email marked as read',
+        'opened_at': updated_email['opened_at'],
+        'sender_email': updated_email['sender_email'],
+        'tone': updated_email['tone'],
+        'is_spam': updated_email['is_spam']
+})
 
 
+@app.route('/sender_dashboard')
+def sender_dashboard():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+
+    current_email = session.get('email')
+    user_id = session.get('user_id')
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Get emails sent by this user with proper formatting
+    cur.execute("""
+        SELECT 
+            e.id,
+            e.recipient_email,
+            e.subject,
+            e.body,
+            strftime('%Y-%m-%d %H:%M', e.sent_at) as sent_at,
+            CASE WHEN e.opened_at IS NULL THEN NULL 
+                 ELSE strftime('%Y-%m-%d %H:%M', e.opened_at) END as opened_at,
+            e.is_spam,
+            e.tone
+        FROM emails e
+        WHERE e.sender_id = ?
+        ORDER BY e.sent_at DESC
+    """, (user_id,))
+
+    sent_emails = cur.fetchall()
+    conn.close()
+
+    return render_template('sender_dashboard.html', 
+                         current_user=current_email, 
+                         current_id=user_id, 
+                         emails=sent_emails)
 @app.route('/admin_dashboard')
 def admin_dashboard():
     if 'user_id' not in session or not session.get('is_admin'):
@@ -194,34 +335,6 @@ def admin_dashboard():
 
     conn.close()
     return render_template('admin_dashboard.html', users=users, stats=stats, all_emails=all_emails, current_user=session.get('email'))
-
-@app.route('/sender_dashboard')
-def sender_dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('index'))
-
-    current_email = session.get('email')
-    user_id = session.get('user_id')
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    # Get emails sent by this user with proper join
-    cur.execute("""
-        SELECT e.id, e.recipient_email, e.subject, e.body, e.sent_at, e.opened_at, 
-               e.is_spam, e.tone, u.email AS sender_email
-        FROM emails e
-        JOIN users u ON e.sender_id = u.id
-        WHERE e.sender_id = ?
-        ORDER BY e.sent_at DESC
-    """, (user_id,))
-
-    sent_emails = cur.fetchall()
-    conn.close()
-
-    return render_template('sender_dashboard.html', current_user=current_email, current_id=user_id, emails=sent_emails)
-
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -253,32 +366,53 @@ def register():
 
     return render_template('register.html')
 
-@app.route('/received_emails')
-def received_emails():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    current_email = session.get('email')
-
+@app.route('/admin/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    if 'user_id' not in session or not session.get('is_admin'):
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+    
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT e.subject, e.body, e.sent_at, e.opened_at, u.email AS sender_email
-        FROM emails e
-        JOIN users u ON e.sender_id = u.id
-        WHERE e.recipient_email = ?
-        ORDER BY e.sent_at DESC
-    """, (current_email,))
-    emails = cur.fetchall()
-    conn.close()
+    
+    try:
+        # First delete all emails associated with this user
+        cur.execute("DELETE FROM emails WHERE sender_id = ?", (user_id,))
+        
+        # Then delete the user
+        cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        
+        conn.commit()
+        return jsonify({'status': 'success', 'message': 'User permanently removed'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    finally:
+        conn.close()
 
-    return render_template('received_emails.html', emails=emails, current_user=current_email)
+        
+@app.route('/llama_generate_tone', methods=['POST'])
+def llama_generate_tone():
+    
+    text = request.json.get('text', '')
+    result = classify_email_tone(text)
+    raw = generate_llama_response(f"Email: {text}\nAnswer:", max_tokens=10)
+    return jsonify({'tone': result, 'raw': raw})
+
+
+@app.route('/llama_generate_spam', methods=['POST'])
+def llama_generate_spam():
+    
+    text = request.json.get('text', '')
+    result = detect_spam(text)
+    raw = generate_llama_response(f"Email: {text}\nAnswer:", max_tokens=5)
+    return jsonify({'spam': result, 'raw': raw})
+
+
 
 @app.route('/logout')
 def logout():
     session.clear()
-    flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True,use_reloader=False)

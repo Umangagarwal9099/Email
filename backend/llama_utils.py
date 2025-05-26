@@ -40,6 +40,7 @@ def detect_spam(email_text: str) -> bool:
         "You are a spam detector. Respond only with 'yes' or 'no'.\n\n"
         "Email: You've won a free prize! Click this link to claim.\nAnswer: yes\n"
         "Email: Let's schedule a meeting for next week.\nAnswer: no\n"
+        "Now i need you to answer about the email below:\n"
         f"Email: {email_text.strip()}\nAnswer:"
     )
     result = generate_llama_response(prompt, max_tokens=5).lower()

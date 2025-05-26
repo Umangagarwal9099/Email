@@ -1,3 +1,6 @@
 flask
 flask-cors
 bcrypt
+transformers 
+accelerate
+torch

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ask TinyLLaMA - MailSense</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" />
+</head>
+<body>
+  <nav class="navbar navbar-dark bg-primary">
+    <div class="container">
+      <a class="navbar-brand" href="#"><i class="bi bi-chat-dots me-2"></i> Ask TinyLLaMA</a>
+      <div class="d-flex">
+        <span class="text-white me-3">{{ current_user }}</span>
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-light">
+          <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container py-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h3 class="card-title mb-3">Ask TinyLLaMA</h3>
+        <p class="text-muted">Type any prompt below and TinyLLaMA will generate a response.</p>
+        <textarea id="llama-prompt" class="form-control mb-3" rows="5" placeholder="Type your prompt here..."></textarea>
+        <button class="btn btn-primary" onclick="askLlama()">
+          <i class="bi bi-robot"></i> Generate
+        </button>
+
+        <div id="llama-response-container" class="mt-4 d-none">
+          <h5 class="mb-2">Response:</h5>
+          <pre id="llama-output" class="bg-light border rounded p-3"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function askLlama() {
+      const prompt = document.getElementById('llama-prompt').value.trim();
+      const output = document.getElementById('llama-output');
+      const container = document.getElementById('llama-response-container');
+
+      if (!prompt) {
+        alert("Please enter a prompt.");
+        return;
+      }
+
+      output.textContent = "Generating...";
+      container.classList.remove("d-none");
+
+      fetch('/llama_generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          output.textContent = data.response;
+        } else {
+          output.textContent = "Error: " + data.message;
+        }
+      })
+      .catch(err => {
+        output.textContent = "Error: " + err.message;
+      });
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,41 +1,217 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Inbox - MailSense</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inbox - MailSense</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" />
 </head>
-<body class="bg-light">
-    <div class="container py-4">
-        <h2 class="mb-4">Inbox - {{ current_user }}</h2>
-        
-        {% if emails %}
-            <table class="table table-bordered bg-white">
-                <thead class="table-dark">
-                    <tr>
-                        <th>From</th>
-                        <th>Subject</th>
-                        <th>Body</th>
-                        <th>Sent At</th>
-                        <th>Read At</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for email in emails %}
-                    <tr>
-                        <td>{{ email['sender_email'] }}</td>
-                        <td>{{ email['subject'] }}</td>
-                        <td>{{ email['body'] }}</td>
-                        <td>{{ email['sent_at'] }}</td>
-                        <td>{{ email['opened_at'] if email['opened_at'] else "Not read" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p>No received emails yet.</p>
-        {% endif %}
-
-        <a href="{{ url_for('sender_dashboard') }}" class="btn btn-secondary mt-3">Back to Dashboard</a>
+<body>
+  <nav class="navbar navbar-dark bg-primary">
+    <div class="container">
+      <a class="navbar-brand" href="#"><i class="bi bi-envelope-open me-2"></i> MailSense</a>
+      <div class="d-flex">
+        <span class="text-white me-3">{{ current_user }}</span>
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-light">
+          <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
+      </div>
     </div>
+  </nav>
+
+  <div class="container py-4">
+    <h2><i class="bi bi-inbox me-2"></i> Inbox</h2>
+    <div class="card mt-3 shadow-sm">
+      <div class="card-body">
+        {% if emails %}
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>From</th><th>Subject</th><th>Preview</th><th>Date</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for email in emails %}
+            <tr class="email-row {% if not email[4] %}unread{% endif %}" data-email-id="{{ email[0] }}">
+              <td>{{ email[5] }}</td>
+              <td class="email-subject">{{ email[1] or '(No subject)' }}</td>
+              <td class="email-body text-muted" data-full-body="{{ email[2] }}">{{ email[2]|truncate(50) }}</td>
+              <td>{{ email[3] }}</td>
+              <td>
+                {% if email[4] %}
+                <span id="email-status-{{ email[0] }}" class="badge bg-success">
+                  <i class="bi bi-check-circle me-1"></i> Read
+                </span>
+                {% else %}
+                <span id="email-status-{{ email[0] }}" class="badge bg-primary">
+                  <i class="bi bi-circle me-1"></i> Unread
+                </span>
+                {% endif %}
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary view-email-btn" data-email-id="{{ email[0] }}">
+                  <i class="bi bi-eye"></i> View
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted text-center">No emails received.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Email Modal -->
+  <div class="modal fade" id="emailModal" tabindex="-1" aria-labelledby="emailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="emailModalLabel">Email Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" id="modal-close-btn"></button>
+        </div>
+        <div class="modal-body">
+          <div><strong>From:</strong> <span id="modal-sender"></span></div>
+          <div><strong>Subject:</strong> <span id="modal-subject"></span></div>
+          <div><strong>Date:</strong> <span id="modal-date"></span></div>
+          <div><strong>Tag:</strong> <span id="modal-tag" class="badge rounded-pill"></span></div>
+          <hr>
+          <div id="modal-body" class="mt-2" style="white-space: pre-wrap;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="modal-close-btn">Close</button>
+          <button type="button" class="btn btn-primary" id="reply-btn" data-bs-toggle="modal" data-bs-target="#replyModal">Reply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reply Modal -->
+  <div class="modal fade" id="replyModal" tabindex="-1" aria-labelledby="replyModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <form id="reply-form" class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Reply</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" id="modal-btn"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="reply-to" class="form-label">To</label>
+            <input type="email" id="reply-to" name="to" class="form-control" readonly />
+          </div>
+          <div class="mb-3">
+            <label for="reply-subject" class="form-label">Subject</label>
+            <input type="text" id="reply-subject" name="subject" class="form-control" />
+          </div>
+          <div class="mb-3">
+            <label for="reply-body" class="form-label">Message</label>
+            <textarea id="reply-body" name="body" class="form-control" rows="5" required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal" id="modal-btn">Cancel</button>
+          <button class="btn btn-primary" type="submit" id="modal-btn">Send Reply</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const emailModal = new bootstrap.Modal(document.getElementById('emailModal'));
+
+    document.querySelectorAll('.view-email-btn').forEach(button => {
+      button.addEventListener('click', function () {
+        const row = this.closest('tr');
+        const id = this.dataset.emailId;
+        const sender = row.children[0].textContent.trim();
+        const subject = row.querySelector('.email-subject').textContent.trim();
+        const body = row.querySelector('.email-body').dataset.fullBody;
+        const date = row.children[3].textContent.trim();
+
+        document.getElementById('modal-sender').textContent = sender;
+        document.getElementById('modal-subject').textContent = subject;
+        document.getElementById('modal-body').textContent = body;
+        document.getElementById('modal-date').textContent = date;
+
+        emailModal.show();
+
+        fetch(`/mark_email_read/${id}`, { method: 'POST' })
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === 'success') {
+              const status = document.getElementById(`email-status-${id}`);
+              if (status) {
+                status.classList.remove('badge-primary');
+                status.classList.add('bg-success');
+                status.innerHTML = '<i class="bi bi-check-circle me-1"></i> Read';
+              }
+              row.classList.remove('unread');
+
+              // Set tag badge
+              const tag = document.getElementById('modal-tag');
+              if (data.is_spam) {
+                tag.textContent = 'Potential Spam';
+                tag.className = 'badge rounded-pill bg-danger';
+              } else {
+                tag.textContent = data.tone.charAt(0).toUpperCase() + data.tone.slice(1);
+                const toneClass = {
+                  polite: 'bg-info',
+                  urgent: 'bg-warning text-dark',
+                  neutral: 'bg-secondary',
+                  formal: 'bg-dark'
+                }[data.tone] || 'bg-secondary';
+                tag.className = `badge rounded-pill ${toneClass}`;
+              }
+            }
+          });
+      });
+    });
+
+    document.getElementById('reply-btn').addEventListener('click', () => {
+      const sender = document.getElementById('modal-sender').textContent.trim();
+      const subject = document.getElementById('modal-subject').textContent.trim();
+      document.getElementById('reply-to').value = sender;
+      document.getElementById('reply-subject').value = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
+    });
+
+    document.getElementById('reply-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      fetch('/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_id: {{ session.get('user_id') | tojson }},
+          recipient: document.getElementById('reply-to').value,
+          subject: document.getElementById('reply-subject').value,
+          body: document.getElementById('reply-body').value
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.message === 'Email sent') {
+            alert('Reply sent successfully!');
+            bootstrap.Modal.getInstance(document.getElementById('replyModal')).hide();
+            document.getElementById('reply-form').reset();
+          } else {
+            alert('Error: ' + data.message);
+          }
+        });
+    });
+
+    document.getElementById('modal-close-btn').addEventListener('click', function () {
+      location.reload();
+    });
+
+    document.querySelectorAll('#modal-btn').forEach(btn => {
+      btn.addEventListener('click', () => location.reload());
+    });
+  </script>
 </body>
 </html>
+s

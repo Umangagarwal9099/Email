@@ -4,3 +4,4 @@ bcrypt
 transformers 
 accelerate
 torch
+llama-cpp-python

@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+env/
+venv/
+*.log
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Flask instance folder
+instance/
+
+# LLaMA / ML models
+*.gguf
+*.pt
+*.bin
+*.ckpt
+*.safetensors
+*.npz
+*.h5
+models/
+weights/
+data/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Git LFS artifacts
+*.lfs*
